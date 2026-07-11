@@ -13,8 +13,6 @@ export CROSS_COMPILE=aarch64-linux-gnu-
 export CC=clang
 export LLVM=1
 export LLVM_IAS=1
-export KBUILD_BUILD_USER="Templar"
-export KBUILD_BUILD_HOST="builder"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
