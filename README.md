@@ -82,7 +82,7 @@ If you already have it at `~/anykernel3`, change the path in the script.
 ## Notes
 
 - GKI 2.0 compatible (KMI generation 9, android12-5.10)
-- Tested on HyperOS Android 14 (garnet)
+- Tested on HyperOS Android 14/16 (garnet)
 - Unlocked bootloader required
 - Works with Magisk + KPatch-Next-Module (KPM)
 - With 16GB RAM or less, ThinLTO is required to avoid OOM during linking
