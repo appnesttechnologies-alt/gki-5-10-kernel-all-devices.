@@ -1,0 +1,22 @@
+# ThinLTO instead of FullLTO to reduce RAM during link
+# CONFIG_LTO_CLANG_FULL is not set
+CONFIG_LTO_CLANG_THIN=y
+
+# Safe networking for HyperOS
+CONFIG_TCP_CONG_ADVANCED=y
+CONFIG_TCP_CONG_BBR=y
+CONFIG_NET_SCH_CAKE=y
+
+# I/O scheduler
+CONFIG_MQ_IOSCHED_KYBER=y
+
+# Memory
+CONFIG_ZPOOL=y
+
+# Filesystem (HyperOS uses F2FS + EROFS)
+CONFIG_F2FS_FS_COMPRESSION=y
+CONFIG_EROFS_FS_PCPU_KTHREAD=y
+CONFIG_EROFS_FS_PCPU_KTHREAD_HIPRI=y
+
+# Disable debug filesystem to reduce info exposure
+# CONFIG_DEBUG_FS is not set
