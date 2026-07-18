@@ -16,24 +16,28 @@ jobs:
     - name: Build Kernel
       shell: bash
       run: |
-        # 1. Dependencies
+        # 1. Dependencies (Compiler tools added)
         sudo apt-get update
-        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make
+        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
         
-        # 2. Sahi MemKernel setup link
+        # 2. Setup
         curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M myname
         
         # 3. Environment variables
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CC=clang
+        export CLANG_TRIPLE=aarch64-linux-gnu-
         
-        # 4. Build
+        # 4. Build Process
         mkdir -p out
-        make O=out gki_defconfig
-        # Fragment merge (path check kar lena, agar root mein hai toh sahi hai)
+        make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+        
+        # 5. Merge fragments
         ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-        make O=out -j$(nproc) Image.gz-dtb
+        
+        # 6. Compile
+        make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang CLANG_TRIPLE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
 
     - name: Upload Kernel
       uses: actions/upload-artifact@v4
