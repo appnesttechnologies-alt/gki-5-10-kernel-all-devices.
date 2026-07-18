@@ -13,30 +13,29 @@ jobs:
     - name: Fix git ownership
       run: git config --global --add safe.directory /github/workspace
 
-    - name: Set up MemKernel and Build
+    - name: Build Kernel
       shell: bash
       run: |
-        # 1. MemKernel setup
+        # 1. Dependencies install karo
+        sudo apt-get update
+        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm
+        
+        # 2. MemKernel setup
         curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
         
-        # 2. Dependencies
-        sudo apt-get update
-        sudo apt-get install -y clang lld llvm libssl-dev bc bison flex libelf-dev
-        
-        # 3. Build setup
+        # 3. Environment variables
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CC=clang
         
-        # 4. Generate config
+        # 4. Build
+        mkdir -p out
         make O=out gki_defconfig
-        # Fragment add karna
+        # Agar garnet_optimized.fragment file root mein hai
         ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-        
-        # 5. Compile
         make O=out -j$(nproc) Image.gz-dtb
 
-    - name: Upload Kernel and Module
+    - name: Upload Kernel
       uses: actions/upload-artifact@v4
       with:
         name: module
