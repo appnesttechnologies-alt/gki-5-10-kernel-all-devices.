@@ -22,8 +22,8 @@ jobs:
         NAME: Loganysl
       with:
         arch: arm64
-        # EXACT COMPILER INPUT MATCHING YOUR SOURCE FOR ANDROID 12 (5.10)
-        compiler: aosp-clang/android12-5.10/clang-r416183b/binutils
+        # FIXED: Replaced "android12-5.10" branch layout with standard "master" target mirror path
+        compiler: aosp-clang/master/clang-r416183b/binutils
         defconfig: gki_defconfig
         image: Image.gz-dtb
 
@@ -34,3 +34,4 @@ jobs:
         path: |
           ${{ steps.build.outputs.outfile }}
           ./out/drivers/memkernel/memkernel.ko
+
