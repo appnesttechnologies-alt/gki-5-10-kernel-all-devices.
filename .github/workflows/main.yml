@@ -99,13 +99,17 @@ jobs:
           OBJCOPY: llvm-objcopy
           OBJDUMP: llvm-objdump
           STRIP: llvm-strip
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 2G
+          KCFLAGS: "-Wno-error=frame-larger-than"
         run: |
           # Build the requested image target; adjust target if needed
           TARGET=Image.gz-dtb
           echo "Building kernel target: $TARGET"
-          make -C . O=$O ARCH=$ARCH CC=$CC LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
+          make -C . O=$O ARCH=$ARCH CC="ccache clang" LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
             LD=$LD AR=$AR NM=$NM OBJCOPY=$OBJCOPY OBJDUMP=$OBJDUMP STRIP=$STRIP \
-            $TARGET -j$(nproc) || { echo "Kernel image build failed"; exit 1; }
+            KCFLAGS="$KCFLAGS" \
+            $TARGET -j$(nproc) 2>&1 | tee build.log || { echo "Kernel image build failed"; cat build.log; exit 1; }
 
       - name: Build modules (so memkernel.ko is produced)
         env:
@@ -118,21 +122,79 @@ jobs:
           OBJCOPY: llvm-objcopy
           OBJDUMP: llvm-objdump
           STRIP: llvm-strip
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 2G
+          KCFLAGS: "-Wno-error=frame-larger-than"
         run: |
           echo "Building modules"
-          make -C . O=$O ARCH=$ARCH CC=$CC LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
+          make -C . O=$O ARCH=$ARCH CC="ccache clang" LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
             LD=$LD AR=$AR NM=$NM OBJCOPY=$OBJCOPY OBJDUMP=$OBJDUMP STRIP=$STRIP \
-            modules -j$(nproc) || { echo "Modules build failed"; exit 1; }
+            KCFLAGS="$KCFLAGS" \
+            modules -j$(nproc) 2>&1 | tee modules.log || { echo "Modules build failed"; cat modules.log; exit 1; }
 
       - name: Show produced files (debug)
         run: |
           echo "Listing common image/module locations under $O:"
-          find $O -maxdepth 6 -type f -iname "Image*" -o -iname "*gz-dtb*" -print -ls || true
+          find $O -maxdepth 6 -type f \( -iname "Image*" -o -iname "*gz-dtb*" \) -print -ls || true
           echo "Looking for memkernel.ko (common path: out/drivers/memkernel/memkernel.ko):"
           if [ -f "$O/drivers/memkernel/memkernel.ko" ]; then
             ls -l "$O/drivers/memkernel/memkernel.ko"
           elif [ -f "./out/drivers/memkernel/memkernel.ko" ]; then
             ls -l "./out/drivers/memkernel/memkernel.ko"
+          else
+            echo "memkernel.ko not found at expected locations; listing drivers dir:"
+            ls -l $O/drivers || true
+          fi
+
+      - name: Package found artifacts
+        id: package
+        run: |
+          mkdir -p artifacts
+          # Candidate artifact paths (tweak if your tree produces different paths)
+          CANDIDATES=(
+            "$O/arch/$ARCH/boot/Image.gz-dtb"
+            "$O/arch/$ARCH/boot/Image"
+            "$O/arch/$ARCH/boot/Image.gz"
+            "$O/arch/$ARCH/boot/dts/*/*.dtb"
+            "$O/drivers/memkernel/memkernel.ko"
+          )
+          set +e
+          for p in "${CANDIDATES[@]}"; do
+            # expand globs
+            for f in $(ls -d $p 2>/dev/null || true); do
+              if [ -f "$f" ]; then
+                echo "Packaging $f"
+                mkdir -p artifacts/$(dirname "$f")
+                cp --parents "$f" artifacts/ 2>/dev/null || cp "$f" artifacts/ || true
+              fi
+            done
+          done
+          set -e
+          if [ -n "$(ls -A artifacts 2>/dev/null)" ]; then
+            tar -C artifacts -czf kernel-artifacts.tar.gz .
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "No artifacts were found to package."
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Kernel and Module
+        if: ${{ steps.package.outputs.found == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-artifacts
+          path: kernel-artifacts.tar.gz
+
+      - name: Final status (success)
+        if: ${{ steps.package.outputs.found == 'true' }}
+        run: |
+          echo "✓ Build finished and artifacts uploaded."
+
+      - name: Final status (no artifacts)
+        if: ${{ steps.package.outputs.found == 'false' }}
+        run: |
+          echo "✗ Build finished but no artifacts were found to upload. Check logs above for errors."
+          exit 1            ls -l "./out/drivers/memkernel/memkernel.ko"
           else
             echo "memkernel.ko not found at expected locations; listing drivers dir:"
             ls -l $O/drivers || true
