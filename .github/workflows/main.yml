@@ -12,8 +12,8 @@ jobs:
 
     - name: Set up MemKernel as a module
       run: |
-        # Updated to your functional setup link with correct device parameter 'dogi'
-        curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
+        # Fixed back to the valid Poko-Apps repository URL
+        curl -fLSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
@@ -21,13 +21,9 @@ jobs:
       env:
         NAME: Loganysl
       with:
-        # Changed to arm64 since you are building for modern aarch64 GKI GSI targets
         arch: arm64
-        # Updated to a stable, compatible Clang version containing the necessary gas links
         compiler: clang-r418251b
-        # Replaced the placeholder with your target defconfig name
         defconfig: gki_defconfig
-        # Replaced with your target build output target
         image: Image.gz-dtb
 
     - name: Upload Kernel and Module
