@@ -19,11 +19,11 @@ jobs:
           mkdir -p /home/runner/toolchain
           curl -L https://arm.com | tar -xJ -C /home/runner/toolchain --strip-components=1
           
-          # Force system-wide symlinks so no script can delete them
+          # Force system-wide symlinks
           sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc
           sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-none-linux-gnu-gcc
           
-          # Add to global path
+          # Add to global runner path
           echo "/home/runner/toolchain/bin" >> $GITHUB_PATH
 
       - name: Build Kernel
@@ -39,18 +39,24 @@ jobs:
           # 1. Run external setup
           curl -LSs "https://githubusercontent.com" | bash -s M myname
           
-          # 2. Re-verify system link immediately before building
+          # 2. Hard-patch the Kconfig file to look for the toolchain compiler directly
+          if [ -f "scripts/Kconfig.include" ]; then
+            sed -i 's/$(CROSS_COMPILE)gcc/\/home\/runner\/toolchain\/bin\/aarch64-none-linux-gnu-gcc/g' scripts/Kconfig.include
+            sed -i 's/aarch64-linux-gnu-gcc/\/home\/runner\/toolchain\/bin\/aarch64-none-linux-gnu-gcc/g' scripts/Kconfig.include
+          fi
+          
+          # 3. Double-check global links
           sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc
           
           mkdir -p out
           
-          # 3. Configure (Explicitly passing variables to override Kconfig scripts)
+          # 4. Configure
           make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE CROSS_COMPILE_ARM64=$CROSS_COMPILE gki_defconfig
           
-          # 4. Merge
+          # 5. Merge
           ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
           
-          # 5. Compile
+          # 6. Compile
           make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE CROSS_COMPILE_ARM64=$CROSS_COMPILE -j$(nproc) Image.gz-dtb
 
       - name: Upload
