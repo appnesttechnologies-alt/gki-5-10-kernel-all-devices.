@@ -10,59 +10,29 @@ jobs:
     - name: Checkout kernel source
       uses: actions/checkout@v4
 
-    - name: Install System Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make libssl-dev
-
     - name: Set up MemKernel as a module
+      shell: bash
       run: |
         git config --global --add safe.directory $GITHUB_WORKSPACE
-        curl -fLSs "https://githubusercontent.com" | bash -s M dogi
+        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
-    - name: Setup Exact Clang Toolchain Path
-      run: |
-        # Build out the exact directory structures defined inside your build configs
-        mkdir -p prebuilts-master/clang/host/linux-x86/
-        
-        # Pull the exact r416183b binary archive stack directly from the stable AOSP build index branch
-        curl -fLSs "https://googlesource.com" | tar -xz -C prebuilts-master/clang/host/linux-x86/
-        
-        # Create standard system-level cross-compiler reference links inside the directory
-        ln -sf $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-unknown-gcc $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-gcc
-        
-        # Inject our working binaries straight into the global execution path environment
-        echo "$(pwd)/prebuilts-master/clang/host/linux-x86/bin" >> $GITHUB_PATH
-
-    - name: Compile GKI Kernel Natively
-      shell: bash
+    - name: Android kernel build
+      uses: lemniskett/android-kernel-actions@master
+      id: build
       env:
-        ARCH: arm64
-        CROSS_COMPILE: aarch64-linux-gnu-
-        CC: clang
-        CLANG_TRIPLE: aarch64-linux-gnu-
-        LD: ld.lld
-        AR: llvm-ar
-        NM: llvm-nm
-        OBJCOPY: llvm-objcopy
-        OBJDUMP: llvm-objdump
-        STRIP: llvm-strip
-      run: |
-        mkdir -p out
-        
-        # 1. Generate the base configuration layout file
-        make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE gki_defconfig
-        
-        # 2. Append the required optimization changes
-        ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-        
-        # 3. Process the explicit image output build compilation step
-        make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE -j$(nproc) Image.gz-dtb
+        NAME: Loganysl
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      with:
+        arch: arm64
+        # CORRECT COMPILER STRING FOR THE LEMNISKETT ACTION INTERFACE
+        compiler: aosp-clang/master/clang-r416183b/binutils
+        defconfig: gki_defconfig
+        image: Image.gz-dtb
 
     - name: Upload Kernel and Module
       uses: actions/upload-artifact@v4
       with:
         name: module
         path: |
-          out/arch/arm64/boot/Image.gz-dtb
-          out/drivers/memkernel/memkernel.ko
+          ${{ steps.build.outputs.outfile }}
+          ./out/drivers/memkernel/memkernel.ko
