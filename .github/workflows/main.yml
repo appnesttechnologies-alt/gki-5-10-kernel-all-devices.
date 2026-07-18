@@ -12,8 +12,8 @@ jobs:
 
     - name: Set up MemKernel as a module
       run: |
-        # Fixed back to the valid Poko-Apps repository URL
-        curl -fLSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
+        git config --global --add safe.directory $GITHUB_WORKSPACE
+        curl -fLSs "https://githubusercontent.com" | bash -s M dogi
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
@@ -22,7 +22,8 @@ jobs:
         NAME: Loganysl
       with:
         arch: arm64
-        compiler: clang-r418251b
+        # EXACT COMPILER INPUT MATCHING YOUR SOURCE FOR ANDROID 12 (5.10)
+        compiler: aosp-clang/android12-5.10/clang-r416183b/binutils
         defconfig: gki_defconfig
         image: Image.gz-dtb
 
