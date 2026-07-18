@@ -960,4 +960,3 @@ out:
 		path_put(ctx.pathp);
 	return ctx.ret;
 }
-
