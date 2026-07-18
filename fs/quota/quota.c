@@ -901,6 +901,80 @@ struct quotactl_context {
 	int ret;
 };
 
+
+// Add this helper function before SYSCALL_DEFINE4 (around line 910)
+// This reduces stack frame by splitting the logic
+
+static int quota_get_quotactl_info(unsigned int cmd, const char __user *special,
+				   unsigned int id, void __user *addr)
+{
+	struct super_block *sb;
+	struct kqid qid;
+	int type;
+	char *tmp;
+	int ret = 0;
+
+	tmp = getname(special);
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+
+	sb = quotactl_block(tmp, &type);
+	if (IS_ERR(sb)) {
+		ret = PTR_ERR(sb);
+		goto out;
+	}
+
+	qid = make_kqid(current_user_ns(), type, id);
+	if (!qid_valid(qid)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	switch (cmd) {
+	case Q_QUOTAON:
+		ret = quota_quotaon(sb, type, id, addr);
+		break;
+	case Q_QUOTAOFF:
+		ret = quota_quotaoff(sb, type);
+		break;
+	case Q_GETQUOTA:
+		ret = quota_getquota(sb, qid, addr);
+		break;
+	case Q_SETQUOTA:
+		ret = quota_setquota(sb, qid, addr);
+		break;
+	case Q_SYNC:
+		ret = quota_sync_all(type);
+		break;
+	case Q_GET_DQBLK:
+		ret = quota_getfq_dqblk(sb, qid, addr);
+		break;
+	case Q_SET_DQBLK:
+		ret = quota_setfq_dqblk(sb, qid, addr);
+		break;
+	case Q_GET_DQINFO:
+		ret = quota_getfq_dqinfo(sb, type, addr);
+		break;
+	case Q_SET_DQINFO:
+		ret = quota_setfq_dqinfo(sb, type, addr);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	quotactl_block_release(sb);
+out:
+	putname(tmp);
+	return ret;
+}
+
+SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
+		 unsigned int, id, void __user *, addr)
+{
+	return quota_get_quotactl_info(cmd, special, id, addr);
+}
+
+
 /*
  * This is the system call interface. This communicates with
  * the user-level programs. Currently this only supports diskquota
