@@ -891,6 +891,16 @@ static struct super_block *quotactl_block(const char __user *special, int cmd)
 #endif
 }
 
+/* Structure to reduce stack frame size in __arm64_sys_quotactl */
+struct quotactl_context {
+	uint cmds;
+	int type;
+	struct super_block *sb;
+	struct path path;
+	struct path *pathp;
+	int ret;
+};
+
 /*
  * This is the system call interface. This communicates with
  * the user-level programs. Currently this only supports diskquota
@@ -900,15 +910,13 @@ static struct super_block *quotactl_block(const char __user *special, int cmd)
 SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 		qid_t, id, void __user *, addr)
 {
-	uint cmds, type;
-	struct super_block *sb = NULL;
-	struct path path, *pathp = NULL;
-	int ret;
+	struct quotactl_context ctx;
 
-	cmds = cmd >> SUBCMDSHIFT;
-	type = cmd & SUBCMDMASK;
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.cmds = cmd >> SUBCMDSHIFT;
+	ctx.type = cmd & SUBCMDMASK;
 
-	if (type >= MAXQUOTAS)
+	if (ctx.type >= MAXQUOTAS)
 		return -EINVAL;
 
 	/*
@@ -917,8 +925,8 @@ SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 	 * the sync action on each of them.
 	 */
 	if (!special) {
-		if (cmds == Q_SYNC)
-			return quota_sync_all(type);
+		if (ctx.cmds == Q_SYNC)
+			return quota_sync_all(ctx.type);
 		return -ENODEV;
 	}
 
@@ -927,28 +935,29 @@ SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 	 * because that gets s_umount sem which is also possibly needed by path
 	 * resolution (think about autofs) and thus deadlocks could arise.
 	 */
-	if (cmds == Q_QUOTAON) {
-		ret = user_path_at(AT_FDCWD, addr, LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT, &path);
-		if (ret)
-			pathp = ERR_PTR(ret);
+	if (ctx.cmds == Q_QUOTAON) {
+		ctx.ret = user_path_at(AT_FDCWD, addr, LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT, &ctx.path);
+		if (ctx.ret)
+			ctx.pathp = ERR_PTR(ctx.ret);
 		else
-			pathp = &path;
+			ctx.pathp = &ctx.path;
 	}
 
-	sb = quotactl_block(special, cmds);
-	if (IS_ERR(sb)) {
-		ret = PTR_ERR(sb);
+	ctx.sb = quotactl_block(special, ctx.cmds);
+	if (IS_ERR(ctx.sb)) {
+		ctx.ret = PTR_ERR(ctx.sb);
 		goto out;
 	}
 
-	ret = do_quotactl(sb, type, cmds, id, addr, pathp);
+	ctx.ret = do_quotactl(ctx.sb, ctx.type, ctx.cmds, id, addr, ctx.pathp);
 
-	if (!quotactl_cmd_onoff(cmds))
-		drop_super(sb);
+	if (!quotactl_cmd_onoff(ctx.cmds))
+		drop_super(ctx.sb);
 	else
-		drop_super_exclusive(sb);
+		drop_super_exclusive(ctx.sb);
 out:
-	if (pathp && !IS_ERR(pathp))
-		path_put(pathp);
-	return ret;
+	if (ctx.pathp && !IS_ERR(ctx.pathp))
+		path_put(ctx.pathp);
+	return ctx.ret;
 }
+
