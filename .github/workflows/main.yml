@@ -15,18 +15,18 @@ jobs:
         git config --global --add safe.directory $GITHUB_WORKSPACE
         curl -fLSs "https://githubusercontent.com" | bash -s M dogi
 
-    - name: Inject Exact Required Toolchain
+    - name: Pre-download Exact Clang Toolchain
       run: |
-        # Recreating the exact prebuilt path matching your source file parameters
+        # Build out the accurate directory paths expected by your config trees
         mkdir -p prebuilts-master/clang/host/linux-x86/
         
-        # Pulling the exact matching r416183b binary stack directly via a high-speed stable archive mirror
-        curl -fLSs "https://googlesource.com" | tar -xz -C prebuilts-master/clang/host/linux-x86/
+        # Download compiler bundle from the validated Google kernel build matrix branch
+        curl -fLSs "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz" | tar -xz -C prebuilts-master/clang/host/linux-x86/
         
-        # Link the cross-compiler directly inside the binary directory to clear the Kconfig check
+        # Resolve internal system cross-compilation reference checks natively
         ln -sf $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-unknown-gcc $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-gcc
         
-        # Expose the new tools straight into the global path matrix
+        # Expose bin files globally to any sub-shell or engine running in the container
         echo "$(pwd)/prebuilts-master/clang/host/linux-x86/bin" >> $GITHUB_PATH
 
     - name: Android kernel build
@@ -36,7 +36,7 @@ jobs:
         NAME: Loganysl
       with:
         arch: arm64
-        # FIXED: Tell the builder engine to bypass default downloads and use our mapped toolchain layout 
+        # Telling the action script engine to skip network calls and use our active toolchain directory
         compiler: custom
         defconfig: gki_defconfig
         image: Image.gz-dtb
