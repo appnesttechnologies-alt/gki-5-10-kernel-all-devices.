@@ -13,33 +13,33 @@ jobs:
     - name: Fix git ownership
       run: git config --global --add safe.directory /github/workspace
 
-    - name: Set up MemKernel as a module (M-OUT) with specified name
+    - name: Set up MemKernel and Build
       shell: bash
       run: |
+        # 1. MemKernel setup
         curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
-
-    - name: Build Kernel Manually
-      shell: bash
-      env:
-        NAME: Loganysl
-      run: |
-        # Dependencies install karna
-        sudo apt-get update
-        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang
         
-        # Build process
+        # 2. Dependencies
+        sudo apt-get update
+        sudo apt-get install -y clang lld llvm libssl-dev bc bison flex libelf-dev
+        
+        # 3. Build setup
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CC=clang
         
-        echo "Building kernel..."
-        make defconfig gki_defconfig garnet_optimized.fragment
-        make -j$(nproc) Image.gz-dtb
+        # 4. Generate config
+        make O=out gki_defconfig
+        # Fragment add karna
+        ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
+        
+        # 5. Compile
+        make O=out -j$(nproc) Image.gz-dtb
 
     - name: Upload Kernel and Module
       uses: actions/upload-artifact@v4
       with:
         name: module
         path: |
-          ./arch/arm64/boot/Image.gz-dtb
-          ./out/drivers/memkernel/memkernel.ko
+          out/arch/arm64/boot/Image.gz-dtb
+          out/drivers/memkernel/memkernel.ko
