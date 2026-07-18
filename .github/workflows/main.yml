@@ -7,62 +7,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout kernel source
+      uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make gcc-aarch64-linux-gnu
+    - name: Set up MemKernel as a module
+      run: |
+        # Updated to your functional setup link with correct device parameter 'dogi'
+        curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
-      - name: Download Toolchain
-        run: |
-          mkdir -p /home/runner/toolchain
-          curl -L https://arm.com | tar -xJ -C /home/runner/toolchain --strip-components=1
-          
-          # Force system-wide symlinks
-          sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc
-          sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-none-linux-gnu-gcc
-          
-          # Add to global runner path
-          echo "/home/runner/toolchain/bin" >> $GITHUB_PATH
+    - name: Android kernel build
+      uses: lemniskett/android-kernel-actions@master
+      id: build
+      env:
+        NAME: Loganysl
+      with:
+        # Changed to arm64 since you are building for modern aarch64 GKI GSI targets
+        arch: arm64
+        # Updated to a stable, compatible Clang version containing the necessary gas links
+        compiler: clang-r418251b
+        # Replaced the placeholder with your target defconfig name
+        defconfig: gki_defconfig
+        # Replaced with your target build output target
+        image: Image.gz-dtb
 
-      - name: Build Kernel
-        shell: bash
-        env:
-          ARCH: arm64
-          CROSS_COMPILE: /home/runner/toolchain/bin/aarch64-none-linux-gnu-
-          CC: clang
-          CLANG_TRIPLE: aarch64-linux-gnu-
-          HOSTCC: gcc
-          HOSTCXX: g++
-        run: |
-          # 1. Run external setup
-          curl -LSs "https://githubusercontent.com" | bash -s M myname
-          
-          # 2. Hard-patch the Kconfig file to look for the toolchain compiler directly
-          if [ -f "scripts/Kconfig.include" ]; then
-            sed -i 's/$(CROSS_COMPILE)gcc/\/home\/runner\/toolchain\/bin\/aarch64-none-linux-gnu-gcc/g' scripts/Kconfig.include
-            sed -i 's/aarch64-linux-gnu-gcc/\/home\/runner\/toolchain\/bin\/aarch64-none-linux-gnu-gcc/g' scripts/Kconfig.include
-          fi
-          
-          # 3. Double-check global links
-          sudo ln -sf /home/runner/toolchain/bin/aarch64-none-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc
-          
-          mkdir -p out
-          
-          # 4. Configure
-          make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE CROSS_COMPILE_ARM64=$CROSS_COMPILE gki_defconfig
-          
-          # 5. Merge
-          ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-          
-          # 6. Compile
-          make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE CROSS_COMPILE_ARM64=$CROSS_COMPILE -j$(nproc) Image.gz-dtb
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: module
-          path: |
-            out/arch/arm64/boot/Image.gz-dtb
-            out/drivers/memkernel/memkernel.ko
+    - name: Upload Kernel and Module
+      uses: actions/upload-artifact@v4
+      with:
+        name: module
+        path: |
+          ${{ steps.build.outputs.outfile }}
+          ./out/drivers/memkernel/memkernel.ko
