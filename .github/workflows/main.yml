@@ -26,8 +26,7 @@ jobs:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         arch: arm64
-        # 'clang-16' ke jagah 'clang' try kar, kyunki ye action aksar generic name leta hai
-        compiler: clang 
+        # 'compiler' field hata diya hai taaki action apne default pe chale
         defconfig: gki_defconfig garnet_optimized.fragment
         image: Image.gz-dtb
 
