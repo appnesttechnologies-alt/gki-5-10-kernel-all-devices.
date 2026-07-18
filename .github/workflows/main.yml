@@ -13,7 +13,7 @@ jobs:
     - name: Set up MemKernel as a module (M-OUT) with specified name
       shell: bash
       run: |
-        set -e
+        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
         curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" -o setup.sh
         chmod +x setup.sh
         ./setup.sh M dogi
