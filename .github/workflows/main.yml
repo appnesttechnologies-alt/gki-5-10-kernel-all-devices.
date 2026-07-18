@@ -10,25 +10,19 @@ jobs:
     - name: Checkout kernel source
       uses: actions/checkout@v4
 
-    - name: Set up MemKernel as a module (M-OUT) with specified name
-      shell: bash
+  
       run: |
-        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
-        curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" -o setup.sh
-        chmod +x setup.sh
-        ./setup.sh M dogi
+        curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
       id: build
       env:
         NAME: Loganysl
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-        PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
       with:
         arch: arm64
         compiler: clang
-        defconfig: gki_defconfig garnet_optimized.fragment
+        defconfig: gki_defconfig
         image: Image.gz-dtb
 
     - name: Upload Kernel and Module
