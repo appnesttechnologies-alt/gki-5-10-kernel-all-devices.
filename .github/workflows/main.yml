@@ -18,22 +18,28 @@ jobs:
       run: |
         curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
-    - name: Android kernel build
-      uses: lemniskett/android-kernel-actions@master
-      id: build
+    - name: Build Kernel Manually
+      shell: bash
       env:
         NAME: Loganysl
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      with:
-        arch: arm64
-        # 'compiler' field hata diya hai taaki action apne default pe chale
-        defconfig: gki_defconfig garnet_optimized.fragment
-        image: Image.gz-dtb
+      run: |
+        # Dependencies install karna
+        sudo apt-get update
+        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang
+        
+        # Build process
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CC=clang
+        
+        echo "Building kernel..."
+        make defconfig gki_defconfig garnet_optimized.fragment
+        make -j$(nproc) Image.gz-dtb
 
     - name: Upload Kernel and Module
       uses: actions/upload-artifact@v4
       with:
         name: module
         path: |
-          ${{ steps.build.outputs.outfile }}
+          ./arch/arm64/boot/Image.gz-dtb
           ./out/drivers/memkernel/memkernel.ko
