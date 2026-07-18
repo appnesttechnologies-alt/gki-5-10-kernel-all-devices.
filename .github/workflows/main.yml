@@ -17,26 +17,27 @@ jobs:
 
     - name: Pre-download Exact Clang Toolchain
       run: |
-        # Build out the accurate directory paths expected by your config trees
+        # Build out the exact directory paths expected by your config trees
         mkdir -p prebuilts-master/clang/host/linux-x86/
         
-        # Download compiler bundle from the validated Google kernel build matrix branch
-        curl -fLSs "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz" | tar -xz -C prebuilts-master/clang/host/linux-x86/
+        # Download the specific compiler bundle from the validated Google index mirror
+        curl -fLSs "https://googlesource.com" | tar -xz -C prebuilts-master/clang/host/linux-x86/
         
-        # Resolve internal system cross-compilation reference checks natively
+        # Create the fallback standard symlinks to satisfy Kconfig checks
         ln -sf $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-unknown-gcc $(pwd)/prebuilts-master/clang/host/linux-x86/bin/aarch64-linux-gnu-gcc
         
-        # Expose bin files globally to any sub-shell or engine running in the container
+        # Expose bin files globally to the virtual environment
         echo "$(pwd)/prebuilts-master/clang/host/linux-x86/bin" >> $GITHUB_PATH
 
     - name: Android kernel build
-      uses: lemniskett/android-kernel-actions@master
+      # CHANGED: Switched to the modern builder engine which allows custom toolchain variables
+      uses: mvaisakh/android-kernel-actions@main
       id: build
       env:
         NAME: Loganysl
       with:
         arch: arm64
-        # Telling the action script engine to skip network calls and use our active toolchain directory
+        # Setting this to custom bypasses server downloads completely 
         compiler: custom
         defconfig: gki_defconfig
         image: Image.gz-dtb
