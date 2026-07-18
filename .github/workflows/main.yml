@@ -8,27 +8,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Kernel
-        shell: bash
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make
+          sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make gcc-aarch64-linux-gnu
+
+      - name: Download and Setup Toolchain
+        run: |
           mkdir -p toolchain
           curl -L https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz | tar -xJ -C toolchain --strip-components=1
-          export PATH=$PWD/toolchain/bin:$PATH
           
-          # Ye line crucial hai: compiler ka shortcut create kar rahe hain
-          ln -s $PWD/toolchain/bin/aarch64-none-linux-gnu-gcc $PWD/toolchain/bin/aarch64-linux-gnu-gcc
+          # Add toolchain directly to GitHub Actions global PATH
+          echo "$GITHUB_WORKSPACE/toolchain/bin" >> $GITHUB_PATH
           
+          # Create the required compiler symlink shortcut
+          ln -s $GITHUB_WORKSPACE/toolchain/bin/aarch64-none-linux-gnu-gcc $GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-gnu-gcc
+
+      - name: Build Kernel
+        shell: bash
+        env:
+          ARCH: arm64
+          CROSS_COMPILE: aarch64-none-linux-gnu-
+          CC: clang
+          CLANG_TRIPLE: aarch64-linux-gnu-
+        run: |
+          # Run your external setup script
           curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M myname
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-none-linux-gnu-
-          export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
+          
           mkdir -p out
-          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- gki_defconfig
+          
+          # Configure and Build
+          make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE gki_defconfig
           ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- CC=clang CLANG_TRIPLE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
+          make O=out ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CC=$CC CLANG_TRIPLE=$CLANG_TRIPLE -j$(nproc) Image.gz-dtb
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
