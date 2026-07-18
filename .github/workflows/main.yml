@@ -18,11 +18,13 @@ jobs:
       uses: lemniskett/android-kernel-actions@master
       id: build
       env:
-        NAME: optimizer
+        NAME: Loganysl
+        # Node24 forced mode activate kar rahe hain
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
       with:
         arch: arm64
         compiler: clang
-        defconfig: gki_defconfig
+        defconfig: gki_defconfig garnet_optimized.fragment
         image: Image.gz-dtb
 
     - name: Upload Kernel and Module
@@ -32,4 +34,3 @@ jobs:
         path: |
           ${{ steps.build.outputs.outfile }}
           ./out/drivers/memkernel/memkernel.ko
-          
