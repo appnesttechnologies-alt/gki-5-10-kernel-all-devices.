@@ -1,4 +1,3 @@
-# Kernel Build — manual dispatch
 name: Kernel Build
 
 on:
