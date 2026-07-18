@@ -26,7 +26,8 @@ jobs:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         arch: arm64
-        compiler: clang-16
+        # 'clang-16' ke jagah 'clang' try kar, kyunki ye action aksar generic name leta hai
+        compiler: clang 
         defconfig: gki_defconfig garnet_optimized.fragment
         image: Image.gz-dtb
 
