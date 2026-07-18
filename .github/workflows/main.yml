@@ -10,10 +10,13 @@ jobs:
     - name: Checkout kernel source
       uses: actions/checkout@v4
 
+    - name: Fix git ownership
+      run: git config --global --add safe.directory /github/workspace
+
     - name: Set up MemKernel as a module (M-OUT) with specified name
       shell: bash
       run: |
-        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M
+        curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
@@ -23,7 +26,7 @@ jobs:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         arch: arm64
-        compiler: clang
+        compiler: clang-16
         defconfig: gki_defconfig garnet_optimized.fragment
         image: Image.gz-dtb
 
