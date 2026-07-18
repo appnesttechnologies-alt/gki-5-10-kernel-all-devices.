@@ -7,42 +7,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout kernel source
-      uses: actions/checkout@v4
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
 
-    - name: Fix git ownership
-      run: git config --global --add safe.directory /github/workspace
+      - name: Fix git ownership
+        run: git config --global --add safe.directory /github/workspace
 
-    - name: Build Kernel
-      shell: bash
-      run: |
-        # 1. Dependencies (Compiler tools added)
-        sudo apt-get update
-        sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-        
-        # 2. Setup
-        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M myname
-        
-        # 3. Environment variables
-        export ARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CC=clang
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        
-        # 4. Build Process
-        mkdir -p out
-        make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
-        
-        # 5. Merge fragments
-        ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
-        
-        # 6. Compile
-        make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang CLANG_TRIPLE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
+      - name: Build Kernel
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libelf-dev libssl-dev clang lld llvm curl git make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M myname
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          mkdir -p out
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+          ./scripts/kconfig/merge_config.sh -O out out/.config garnet_optimized.fragment
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang CLANG_TRIPLE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
 
-    - name: Upload Kernel
-      uses: actions/upload-artifact@v4
-      with:
-        name: module
-        path: |
-          out/arch/arm64/boot/Image.gz-dtb
-          out/drivers/memkernel/memkernel.ko
+      - name: Upload Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: module
+          path: |
+            out/arch/arm64/boot/Image.gz-dtb
+            out/drivers/memkernel/memkernel.ko
