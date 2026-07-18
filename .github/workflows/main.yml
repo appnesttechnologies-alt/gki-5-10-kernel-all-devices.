@@ -184,6 +184,4 @@ jobs:
         if: ${{ steps.package.outputs.found == 'true' }}
         run: |
           echo "Build finished and artifacts uploaded."
-        if: ${{ steps.package.outputs.found == 'false' }}
-        run: |
-          echo "Build finished but no artifacts were found to upload. Check logs above for errors."
+        
