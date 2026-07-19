@@ -3,191 +3,32 @@ name: Kernel Build
 on:
   workflow_dispatch:
 
-concurrency:
-  group: kernel-build-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-  actions: read
-
-env:
-  O: out
-  ARCH: arm64
-
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 360
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout kernel source
         uses: actions/checkout@v4
+
+      - name: Set up MemKernel as a module
+        run: |
+          # Bash -s M dogi wale approach se setup chalate hain
+          curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
+
+      - name: Android kernel build
+        uses: lemniskett/android-kernel-actions@master
+        id: build
         with:
-          fetch-depth: 0
-
-      - name: Setup vars
-        run: |
-          echo "Using output dir: $O"
-          echo "ARCH: $ARCH"
-
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.ccache
-          key: ${{ runner.os }}-kernel-ccache-${{ hashFiles('**/Makefile', '**/.config') }}
-          restore-keys: |
-            ${{ runner.os }}-kernel-ccache-
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential bc bison flex libncurses-dev libelf-dev dwarves rsync \
-            clang lld llvm llvm-dev clang-format \
-            gcc-aarch64-linux-gnu crossbuild-essential-arm64 \
-            ccache git python3 python3-distutils
-
-      - name: Print tool versions (debug)
-        run: |
-          clang --version || true
-          ld.lld --version || true
-          aarch64-linux-gnu-gcc --version || true
-          uname -a
-          nproc
-
-      - name: Download MemKernel setup script (safer)
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" -o memkernel-setup.sh
-          chmod +x memkernel-setup.sh
-          echo "Downloaded memkernel-setup.sh; inspect/generate logs above if needed."
-
-      - name: Set up MemKernel as a module (M-OUT)
-        shell: bash
-        run: |
-          # Run the setup script; it may add driver sources under drivers/memkernel or similar
-          ./memkernel-setup.sh M || { echo "memkernel setup failed"; exit 1; }
-
-      - name: Prepare base defconfig
-        run: |
-          # Create output directory and generate base defconfig there
-          mkdir -p $O
-          make O=$O ARCH=$ARCH gki_defconfig
-
-      - name: Merge fragment into defconfig (if fragment exists)
-        run: |
-          FRAGMENT="garnet_optimized.fragment"
-          if [ -f "$FRAGMENT" ]; then
-            echo "Merging fragment: $FRAGMENT into $O/.config"
-            # merge_config.sh expects base config first; provide full paths
-            scripts/kconfig/merge_config.sh $O/.config $FRAGMENT
-            # regenerate any new config symbols
-            make O=$O ARCH=$ARCH olddefconfig
-          else
-            echo "Fragment $FRAGMENT not found — skipping merge"
-          fi
-
-      - name: Build kernel image (clang + cross tools)
-        env:
-          CC: clang
-          LLVM: "1"
-          CROSS_COMPILE: aarch64-linux-gnu-
-          LD: ld.lld
-          AR: llvm-ar
-          NM: llvm-nm
-          OBJCOPY: llvm-objcopy
-          OBJDUMP: llvm-objdump
-          STRIP: llvm-strip
-          CCACHE_DIR: ~/.ccache
-          CCACHE_MAXSIZE: 2G
-        run: |
-          # Build the requested image target; adjust target if needed
-          TARGET=Image.gz-dtb
-          echo "Building kernel target: $TARGET"
-          make -C . O=$O ARCH=$ARCH CC="ccache clang" LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
-            LD=$LD AR=$AR NM=$NM OBJCOPY=$OBJCOPY OBJDUMP=$OBJDUMP STRIP=$STRIP \
-            $TARGET -j$(nproc) 2>&1 | tee build.log || { echo "Kernel image build failed"; tail -100 build.log; exit 1; }
-
-      - name: Build modules (so memkernel.ko is produced)
-        env:
-          CC: clang
-          LLVM: "1"
-          CROSS_COMPILE: aarch64-linux-gnu-
-          LD: ld.lld
-          AR: llvm-ar
-          NM: llvm-nm
-          OBJCOPY: llvm-objcopy
-          OBJDUMP: llvm-objdump
-          STRIP: llvm-strip
-          CCACHE_DIR: ~/.ccache
-          CCACHE_MAXSIZE: 2G
-        run: |
-          echo "Building modules"
-          make -C . O=$O ARCH=$ARCH CC="ccache clang" LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE \
-            LD=$LD AR=$AR NM=$NM OBJCOPY=$OBJCOPY OBJDUMP=$OBJDUMP STRIP=$STRIP \
-            modules -j$(nproc) 2>&1 | tee modules.log || { echo "Modules build failed"; tail -100 modules.log; exit 1; }
-
-      - name: Show produced files (debug)
-        run: |
-          echo "Listing common image/module locations under $O:"
-          find $O -maxdepth 6 -type f \( -iname "Image*" -o -iname "*gz-dtb*" \) -print -ls || true
-          echo "Looking for memkernel.ko (common path: out/drivers/memkernel/memkernel.ko):"
-          if [ -f "$O/drivers/memkernel/memkernel.ko" ]; then
-            ls -l "$O/drivers/memkernel/memkernel.ko"
-          elif [ -f "./out/drivers/memkernel/memkernel.ko" ]; then
-            ls -l "./out/drivers/memkernel/memkernel.ko"
-          else
-            echo "memkernel.ko not found at expected locations; listing drivers dir:"
-            ls -l $O/drivers || true
-          fi
-
-      - name: Package found artifacts
-        id: package
-        run: |
-          mkdir -p artifacts
-          # Candidate artifact paths (tweak if your tree produces different paths)
-          CANDIDATES=(
-            "$O/arch/$ARCH/boot/Image.gz-dtb"
-            "$O/arch/$ARCH/boot/Image"
-            "$O/arch/$ARCH/boot/Image.gz"
-            "$O/arch/$ARCH/boot/dts/*/*.dtb"
-            "$O/drivers/memkernel/memkernel.ko"
-          )
-          set +e
-          for p in "${CANDIDATES[@]}"; do
-            # expand globs
-            for f in $(ls -d $p 2>/dev/null || true); do
-              if [ -f "$f" ]; then
-                echo "Packaging $f"
-                mkdir -p artifacts/$(dirname "$f")
-                cp --parents "$f" artifacts/ 2>/dev/null || cp "$f" artifacts/ || true
-              fi
-            done
-          done
-          set -e
-          if [ -n "$(ls -A artifacts 2>/dev/null)" ]; then
-            tar -C artifacts -czf kernel-artifacts.tar.gz .
-            echo "found=true" >> $GITHUB_OUTPUT
-          else
-            echo "No artifacts were found to package."
-            echo "found=false" >> $GITHUB_OUTPUT
-          fi
+          arch: arm64
+          compiler: clang-15 # Ya tumhara jo bhi version hai
+          defconfig: gki_defconfig # Yahan apni defconfig file ka naam dalo
+          image: Image.gz-dtb
 
       - name: Upload Kernel and Module
-        if: ${{ steps.package.outputs.found == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-artifacts
-          path: kernel-artifacts.tar.gz
-
-      - name: Final status (success)
-        if: ${{ steps.package.outputs.found == 'true' }}
-        run: |
-          echo "✓ Build finished and artifacts uploaded."
-
-      - name: Final status (no artifacts)
-        if: ${{ steps.package.outputs.found == 'false' }}
-        run: |
-          echo "✗ Build finished but no artifacts were found to upload. Check logs above for errors."
-          exit 1
+          name: kernel-and-module
+          path: |
+            ${{ steps.build.outputs.outfile }}
+            ./out/drivers/memkernel/memkernel.ko
+            
