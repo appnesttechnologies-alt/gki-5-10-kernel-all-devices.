@@ -900,9 +900,11 @@ static struct super_block *quotactl_block(const char __user *special, int cmd)
 SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 		qid_t, id, void __user *, addr)
 {
-	uint cmds, type;
-	struct super_block *sb = NULL;
-	struct path path, *pathp = NULL;
+	uint cmds;
+	int type;
+	struct super_block *sb;
+	struct path path;
+	struct path *pathp = NULL;
 	int ret;
 
 	cmds = cmd >> SUBCMDSHIFT;
