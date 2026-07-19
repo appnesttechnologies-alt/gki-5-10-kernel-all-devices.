@@ -12,16 +12,16 @@ jobs:
 
       - name: Set up MemKernel as a module
         run: |
-          # Bash -s M dogi wale approach se setup chalate hain
-          curl -LSs "https://raw.githubusercontent.com/aiichi/MemKernel/main/kernel/setup.sh" | bash -s M dogi
+          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" -o setup.sh
+          bash setup.sh M
 
       - name: Android kernel build
         uses: lemniskett/android-kernel-actions@master
         id: build
         with:
           arch: arm64
-          compiler: clang-15 # Ya tumhara jo bhi version hai
-          defconfig: gki_defconfig # Yahan apni defconfig file ka naam dalo
+          compiler: clang-15
+          defconfig: gki_defconfig
           image: Image.gz-dtb
 
       - name: Upload Kernel and Module
@@ -31,4 +31,3 @@ jobs:
           path: |
             ${{ steps.build.outputs.outfile }}
             ./out/drivers/memkernel/memkernel.ko
-            
