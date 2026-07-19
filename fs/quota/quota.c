@@ -891,90 +891,6 @@ static struct super_block *quotactl_block(const char __user *special, int cmd)
 #endif
 }
 
-/* Structure to reduce stack frame size in __arm64_sys_quotactl */
-struct quotactl_context {
-	uint cmds;
-	int type;
-	struct super_block *sb;
-	struct path path;
-	struct path *pathp;
-	int ret;
-};
-
-
-// Add this helper function before SYSCALL_DEFINE4 (around line 910)
-// This reduces stack frame by splitting the logic
-
-static int quota_get_quotactl_info(unsigned int cmd, const char __user *special,
-				   unsigned int id, void __user *addr)
-{
-	struct super_block *sb;
-	struct kqid qid;
-	int type;
-	char *tmp;
-	int ret = 0;
-
-	tmp = getname(special);
-	if (IS_ERR(tmp))
-		return PTR_ERR(tmp);
-
-	sb = quotactl_block(tmp, &type);
-	if (IS_ERR(sb)) {
-		ret = PTR_ERR(sb);
-		goto out;
-	}
-
-	qid = make_kqid(current_user_ns(), type, id);
-	if (!qid_valid(qid)) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	switch (cmd) {
-	case Q_QUOTAON:
-		ret = quota_quotaon(sb, type, id, addr);
-		break;
-	case Q_QUOTAOFF:
-		ret = quota_quotaoff(sb, type);
-		break;
-	case Q_GETQUOTA:
-		ret = quota_getquota(sb, qid, addr);
-		break;
-	case Q_SETQUOTA:
-		ret = quota_setquota(sb, qid, addr);
-		break;
-	case Q_SYNC:
-		ret = quota_sync_all(type);
-		break;
-	case Q_GET_DQBLK:
-		ret = quota_getfq_dqblk(sb, qid, addr);
-		break;
-	case Q_SET_DQBLK:
-		ret = quota_setfq_dqblk(sb, qid, addr);
-		break;
-	case Q_GET_DQINFO:
-		ret = quota_getfq_dqinfo(sb, type, addr);
-		break;
-	case Q_SET_DQINFO:
-		ret = quota_setfq_dqinfo(sb, type, addr);
-		break;
-	default:
-		ret = -EINVAL;
-	}
-
-	quotactl_block_release(sb);
-out:
-	putname(tmp);
-	return ret;
-}
-
-SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
-		 unsigned int, id, void __user *, addr)
-{
-	return quota_get_quotactl_info(cmd, special, id, addr);
-}
-
-
 /*
  * This is the system call interface. This communicates with
  * the user-level programs. Currently this only supports diskquota
@@ -984,13 +900,15 @@ SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 		qid_t, id, void __user *, addr)
 {
-	struct quotactl_context ctx;
+	uint cmds, type;
+	struct super_block *sb = NULL;
+	struct path path, *pathp = NULL;
+	int ret;
 
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.cmds = cmd >> SUBCMDSHIFT;
-	ctx.type = cmd & SUBCMDMASK;
+	cmds = cmd >> SUBCMDSHIFT;
+	type = cmd & SUBCMDMASK;
 
-	if (ctx.type >= MAXQUOTAS)
+	if (type >= MAXQUOTAS)
 		return -EINVAL;
 
 	/*
@@ -999,8 +917,8 @@ SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 	 * the sync action on each of them.
 	 */
 	if (!special) {
-		if (ctx.cmds == Q_SYNC)
-			return quota_sync_all(ctx.type);
+		if (cmds == Q_SYNC)
+			return quota_sync_all(type);
 		return -ENODEV;
 	}
 
@@ -1009,28 +927,28 @@ SYSCALL_DEFINE4(quotactl, unsigned int, cmd, const char __user *, special,
 	 * because that gets s_umount sem which is also possibly needed by path
 	 * resolution (think about autofs) and thus deadlocks could arise.
 	 */
-	if (ctx.cmds == Q_QUOTAON) {
-		ctx.ret = user_path_at(AT_FDCWD, addr, LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT, &ctx.path);
-		if (ctx.ret)
-			ctx.pathp = ERR_PTR(ctx.ret);
+	if (cmds == Q_QUOTAON) {
+		ret = user_path_at(AT_FDCWD, addr, LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT, &path);
+		if (ret)
+			pathp = ERR_PTR(ret);
 		else
-			ctx.pathp = &ctx.path;
+			pathp = &path;
 	}
 
-	ctx.sb = quotactl_block(special, ctx.cmds);
-	if (IS_ERR(ctx.sb)) {
-		ctx.ret = PTR_ERR(ctx.sb);
+	sb = quotactl_block(special, cmds);
+	if (IS_ERR(sb)) {
+		ret = PTR_ERR(sb);
 		goto out;
 	}
 
-	ctx.ret = do_quotactl(ctx.sb, ctx.type, ctx.cmds, id, addr, ctx.pathp);
+	ret = do_quotactl(sb, type, cmds, id, addr, pathp);
 
-	if (!quotactl_cmd_onoff(ctx.cmds))
-		drop_super(ctx.sb);
+	if (!quotactl_cmd_onoff(cmds))
+		drop_super(sb);
 	else
-		drop_super_exclusive(ctx.sb);
+		drop_super_exclusive(sb);
 out:
-	if (ctx.pathp && !IS_ERR(ctx.pathp))
-		path_put(ctx.pathp);
-	return ctx.ret;
+	if (pathp && !IS_ERR(pathp))
+		path_put(pathp);
+	return ret;
 }
